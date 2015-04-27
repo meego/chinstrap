@@ -51,6 +51,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
       counts_per_a[i] = 0;
     }
 
+    auto nprr_time = debug::start_clock();
     const std::unordered_map<uint32_t,Block*> map = TR->head->map;
     a.par_foreach([&](size_t tid, uint32_t a_i){
         Set<uinteger> b(b_buffer.get_memory(tid)); //initialize the memory
@@ -71,11 +72,23 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
           });
       });
 
-    size_t result = 0;
-    for (size_t i = 0; i < a.cardinality; i++) {
-      result += counts_per_a[i];
-    }
-    std::cout << result << std::endl;
+    debug::stop_clock("triangle part",nprr_time);
+    par::reducer<size_t> result(0, [](size_t a, size_t b) {
+      return a + b;
+    });
+
+    auto yanna_time = debug::start_clock();
+    a.par_foreach([&](size_t tid, uint32_t a_i){
+      result.update(tid, counts_per_a[a_to_index[a_i]] * TR->head->map.at(a_i)->data.cardinality);
+    });
+    debug::stop_clock("tail part",yanna_time);
+
+
+//    size_t result = 0;
+  //  for (size_t i = 0; i < a.cardinality; i++) {
+    //  result += counts_per_a[i];
+   // }
+    std::cout << result.evaluate(0) << std::endl;
   }
 
 }
