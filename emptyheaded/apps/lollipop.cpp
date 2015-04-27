@@ -32,13 +32,9 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     ER->push_back(R_0_encoding.encoded.at(0));
     ER->push_back(R_0_encoding.encoded.at(1));
     Trie *TR = Trie::build(ER, [&](size_t index){return true;});
-    allocator::memory<uint8_t> a_buffer(R_0_encoding.key_to_value.size());
-    allocator::memory<uint8_t> b_buffer(R_0_encoding.key_to_value.size());
-    allocator::memory<uint8_t> c_buffer(R_0_encoding.key_to_value.size());
-
-    par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
-        return a + b;
-      });
+    allocator::memory<uint8_t> a_buffer(R->num_columns);
+    allocator::memory<uint8_t> b_buffer(R->num_columns);
+    allocator::memory<uint8_t> c_buffer(R->num_columns);
 
     int tid = 0;
     Set<uinteger> a = TR->head->data;
@@ -55,15 +51,23 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
       counts_per_a[i] = 0;
     }
 
+    const std::unordered_map<uint32_t,Block*> map = TR->head->map;
     a.par_foreach([&](size_t tid, uint32_t a_i){
         Set<uinteger> b(b_buffer.get_memory(tid)); //initialize the memory
-        b = ops::set_intersect(&b,&TR->head->map.at(a_i)->data,&TR->head->data);
+        b = ops::set_intersect(&b,
+                               &TR->head->map.at(a_i)->data,
+                               &TR->head->data);
+
         b.foreach([&](uint32_t b_i) {
-            Set<uinteger> c(c_buffer.get_memory(tid)); //initialize the memory
-            c = ops::set_intersect(&c,&TR->head->map.at(b_i)->data,&TR->head->map.at(a_i)->data);
-            const size_t count = c.cardinality;
-            counts_per_a[a_to_index[a_i]] += count;
-            num_triangles.update(tid,count);
+            auto iter = map.find(b_i);
+            if (iter != map.end()) {
+              Set<uinteger> c(c_buffer.get_memory(tid)); //initialize the memory
+              c = ops::set_intersect(&c,
+                                     &iter->second->data,
+                                     &TR->head->map.at(a_i)->data);
+              const size_t count = c.cardinality;
+              counts_per_a[a_to_index[a_i]] += count;
+            }
           });
       });
 
