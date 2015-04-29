@@ -37,20 +37,24 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
   Set<hybrid> a = TR->head->data;
   a.par_foreach([&](size_t tid, uint32_t a_i){
     Set<hybrid> b(b_buffer.get_memory(tid)); //initialize the memory
-    b = ops::set_intersect(&b,&TR->head->get_block(a_i)->data,&TR->head->data);
+    // b = ops::set_intersect(&b,&TR->head->get_block(a_i)->data,&TR->head->data);
+    b = TR->head->get_block(a_i)->data;
     b.foreach([&](uint32_t b_i) {
-      Set<hybrid> c(c_buffer.get_memory(tid)); //initialize the memory
-      Set<hybrid> c_temp(temp_buffer.get_memory(tid)); //initialize the memory
-      c_temp = ops::set_intersect(&c_temp,&TR->head->get_block(b_i)->data,&TR->head->data);
-      c = ops::set_intersect(&c,&c_temp,&TR->head->get_block(a_i)->data);
-      c.foreach([&](uint32_t c_i) {
-        Set<hybrid> d(d_buffer.get_memory(tid)); //initialize the memory
-        Set<hybrid> d_temp(temp_buffer.get_memory(tid)); //initialize the memory
-        d_temp = ops::set_intersect(&d_temp,&TR->head->get_block(c_i)->data,&TR->head->get_block(a_i)->data);
-        d = ops::set_intersect(&d,&d_temp,&TR->head->get_block(b_i)->data);
-        const size_t count = d.cardinality;
-        num_cliques.update(tid,count);
-      });
+      const Tail<hybrid>* l2 = (Tail<hybrid> *)TR->head->get_block(b_i);
+      if (l2 != NULL) {
+        Set<hybrid> c(c_buffer.get_memory(tid)); //initialize the memory
+        Set<hybrid> c_temp(temp_buffer.get_memory(tid)); //initialize the memory
+        c_temp = ops::set_intersect(&c_temp,&TR->head->get_block(b_i)->data,&TR->head->data);
+        c = ops::set_intersect(&c,&c_temp,&TR->head->get_block(a_i)->data);
+        c.foreach([&](uint32_t c_i) {
+          Set<hybrid> d(d_buffer.get_memory(tid)); //initialize the memory
+          Set<hybrid> d_temp(temp_buffer.get_memory(tid)); //initialize the memory
+          d_temp = ops::set_intersect(&d_temp,&TR->head->get_block(c_i)->data,&TR->head->get_block(a_i)->data);
+          d = ops::set_intersect(&d,&d_temp,&TR->head->get_block(b_i)->data);
+          const size_t count = d.cardinality;
+          num_cliques.update(tid,count);
+        });
+      }
     });
   });
   size_t result = num_cliques.evaluate(0);

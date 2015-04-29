@@ -3,6 +3,7 @@
 #include "emptyheaded.hpp"
 #include "utils/io.hpp"
 extern "C" void run(std::unordered_map<std::string, void*>& relations) {
+
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
 
@@ -47,7 +48,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
 
     //add some sort of lambda to do selections
     Trie<hybrid> *TR_ab = Trie<hybrid>::build(ER_ab,[&](size_t index){
-      return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
+      return true; //ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
 
     debug::stop_clock("Build",bt);
@@ -74,13 +75,17 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
       const Set<hybrid> op1 = ((Tail<hybrid>*) H.get_block(a_i))->data;
       //B = ops::set_intersect(&B,&op1,&A); //intersect the B
 
-      op1.foreach([&](uint32_t b_i){ //Peel off B attributes
+      op1.foreach([&](uint32_t b_i){ // Peel off B attributes
         const Tail<hybrid>* l2 = (Tail<hybrid>*)H.get_block(b_i);
         if(l2 != NULL){
-          const size_t count = ops::set_intersect(&C,
+          C = ops::set_intersect(&C,
             &l2->data,
-            &op1)->cardinality;
-          num_triangles.update(tid,count);
+            &op1);
+          C.foreach([&](uint32_t c_i){ // TODO: what to do about selfloops?
+            if (b_i < c_i) {
+              num_triangles.update(tid, TR_ab->head->get_block(a_i)->data.cardinality);
+            }
+          });
         }
       });
     });
