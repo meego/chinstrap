@@ -1,4 +1,4 @@
 language: cpp
 compiler: gcc
 
-script: "source ./emptyheaded/tests/test_all.sh && cd ./duncecap && sbt test"
+script: "source ./emptyheaded/tests/test_all.sh && cd ./duncecap && ./binariesForTravis/sbt-for-travis test"
