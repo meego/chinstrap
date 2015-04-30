@@ -3,7 +3,7 @@
 
 CXX ?= g++-4.9
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
-override CXX = g++
+#override CXX = g++
 #override CXX = clang++
 override CXXFLAGS += -ltbb -lpthread -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
@@ -73,7 +73,6 @@ libs:
 	cd ./libs && make -C ./gtest-1.7.0
 
 	cd ./libs/ && wget https://www.threadingbuildingblocks.org/sites/default/files/software_releases/linux/tbb43_20150424oss_lin.tgz && tar zxvf tbb43_20150424oss_lin.tgz
-	$(shell bash -c "source ./libs/tbb43_20150424oss/bin/tbbvars.sh intel64")
 
 tests: $(TESTS_EXES)
 	@$(foreach bin, $(TESTS_EXES), $(bin);)
