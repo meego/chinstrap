@@ -21,6 +21,7 @@ class ReplTest extends FunSuite with BeforeAndAfterAll {
     Future {
       sys.process.Process(Seq("./bin/server"), new File("../emptyheaded")).!
     }
+    println("got through beforeAll")
   }
 
   def getServerResponse(input : String): String = {
@@ -38,13 +39,14 @@ class ReplTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("Check that repl can compile a query w/o repeated tables") {
+    println("got here 1")
     val result = getServerResponse(":load scripts/triangle.datalog")
     assert(result.contains("6 rows loaded"))
     assert(result.contains("6\n"))
   }
 
   test("Check that repl can compile graph queries") {
-    println("got here")
+    println("got here 2")
     val result1 = getServerResponse(":load scripts/triangleOpt.datalog")
     assert(result1.contains("6 rows loaded"))
     assert(result1.contains("6\n"))
