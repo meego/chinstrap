@@ -15,7 +15,7 @@ const char* OBJ_FILE_NAME = "GENERATED_runnable.o";
 const std::string COMPILE_COMMAND = (std::string("clang++ ") // Start with an std::string to overload the + operator
                                      + CPP_FILE_NAME
                                      + " -o " + OBJ_FILE_NAME
-                                     + " -shared -fPIC -std=c++11 -march=native -mtune=native -Isrc -O3");
+                                     + " -shared -fPIC -std=c++11 -ltbb -march=native -mtune=native -Isrc -O3");
 
 typedef void (*run_t)(std::unordered_map<std::string, void*>& relations);
 
