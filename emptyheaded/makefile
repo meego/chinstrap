@@ -28,10 +28,14 @@ GENERATED_SOURCES=$(shell ls generated)
 APPS=$(APPS_SOURCES:.cpp=)
 TOOLS=$(TOOLS_SOURCES:.cpp=)
 TESTS=$(TESTS_SOURCES:.cpp=)
+GENERATED=${GENERATED_SOURCES:.cpp=}
+SERVER=${SERVER_SOURCES:.cpp=}
 
 APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
 TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
+GENERATED_EXES=$(GENERATED:%=$(EXEDIR)/%)
+SERVER_EXES=$(SERVER:%=$(EXEDIR)/%)
 
 all: $(APPS_EXES) $(TOOLS_EXES) $(SERVER_EXES)
 
@@ -56,19 +60,15 @@ $(OBJECTS): $(SOURCES) $(HEADERS) $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(LIB_INCS) -o $@ -c $(@:build%.o=src%.cpp) $(INCLUDE_DIRS)
 
 generated: $(OBJECTS) $(EXEDIR)
-	GENERATED=${GENERATED_SOURCES:.cpp=}
-	GENERATED_EXES=$(GENERATED:%=$(EXEDIR)/%)
 	$(CXX) $(CXXFLAGS) $(@:bin%=generated%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $@ $(INCLUDE_DIRS)
 
 server: $(OBJECTS) $(EXEDIR)
-	SERVER=$(SERVER_SOURCES:.cpp=)
-	SERVER_EXES=$(SERVER:%=$(EXEDIR)/%)
-	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(CXXFLAGS) server/$@.cpp $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o bin/$@ $(INCLUDE_DIRS)
 
 libs:
 	rm -rf libs
 	mkdir -p libs
-	cd ./libs && wget https://googletest.googlecode.com/files/gtest-1.7.0.zip && unzip gtest-1.7.0.zip 
+	cd ./libs && wget https://googletest.googlecode.com/files/gtest-1.7.0.zip && unzip gtest-1.7.0.zip
 	cd ./libs/gtest-1.7.0/ && ./configure
 	cd ./libs && make -C ./gtest-1.7.0
 
