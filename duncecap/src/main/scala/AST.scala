@@ -109,8 +109,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   private def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String], relations : Relations, equivalanceClasses : List[EquivalenceClass]) = {
     attrs.map((attr : String) => {
       val encoding : Column= getEncodingRelevantToAttr(attr, relations, equivalanceClasses)
-      s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(${mkEncodingName(encoding)}_encoding.key_to_value.size());""")
+      s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(${mkEncodingName(encoding)}_encoding.key_to_value.size()*sizeof(uint32_t));""")
     })
+
+    // emit a temp buffer in case any of the attrs require more than one intersection
+    s.println(s"""allocator::memory<uint8_t> temp_buffer(1000);""")
   }
 
   private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
@@ -121,11 +124,28 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       // no need to emit an intersection
       s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->data;""")
      } else {
+
+      val numIntersections = relsAttrsWithAttr.size - 1
+      // if there are multiple intersections, we need to use both the attr's buffer and a temp buffer
+      // we make sure that the last intersection leaves the answer in the attr's buffer
+      if (numIntersections % 2 == 0) {
+        Environment.resetIntersectionBuffer(List("temp", attr))
+      } else {
+        Environment.resetIntersectionBuffer(List(attr, "temp"))
+      }
+
+
       s.println(s"""Set<${layout}> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
+
       // emit an intersection for the first two relations
-      s.println(s"""${attr} = ops::set_intersect(&${attr},&${relsAttrsWithAttr.head}->data,&${relsAttrsWithAttr.tail.head}->data);""")
+      s.println(s"""${Environment.getIntersectionBuffer()} = ops::set_intersect(&${Environment.getIntersectionBuffer()},&${relsAttrsWithAttr.head}->data,&${relsAttrsWithAttr.tail.head}->data);""")
+      Environment.nextIntersectionBuffer()
+      // intersections for rest of relations
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail
-      restOfRelsAttrsWithAttr.map((rel : String) => s.println(s"""${attr} = ops::set_intersect(&${attr},&${attr},&${rel}->data);"""))
+      restOfRelsAttrsWithAttr.map((rel : String) => {
+        s.println(s"""${Environment.getIntersectionBuffer()} = ops::set_intersect(&${Environment.getIntersectionBuffer()},&${Environment.getPrevIntersectionBuffer()},&${rel}->data);""")
+        Environment.nextIntersectionBuffer()
+      })
     }
 
     if (lastIntersection) {
@@ -148,6 +168,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
     if (outermostLoop) {
       s.println(s"""${attrs.head}.par_foreach([&](size_t tid, uint32_t ${attrs.head}_i){""")
+      // emit temp buffer
+      s.println(s"""Set<${layout}> temp(temp_buffer.get_memory(tid)); //initialize the memory""")
       emitNPRR(s, false, attrs.tail, relsAttrs)
       s.println("});")
     } else {
