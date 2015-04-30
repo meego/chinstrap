@@ -74,8 +74,8 @@ libs:
 
 	cd ./libs/ && wget https://www.threadingbuildingblocks.org/sites/default/files/software_releases/linux/tbb43_20150424oss_lin.tgz && tar zxvf tbb43_20150424oss_lin.tgz
 
-  cd ./libs/ && wget http://download.zeromq.org/zeromq-4.0.5.tar.gz && tar xvzf zeromq-4.0.5.tar.gz
-  cd ./libs/zeromq-4.0.5 && ./configure && make && make install
+	cd ./libs && wget http://download.zeromq.org/zeromq-4.0.5.tar.gz && tar xvzf zeromq-4.0.5.tar.gz
+	cd ./libs/zeromq-4.0.5 && ./configure && make && make install
 
 tests: $(TESTS_EXES)
 	@$(foreach bin, $(TESTS_EXES), $(bin);)
