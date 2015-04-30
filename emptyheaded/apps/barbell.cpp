@@ -10,8 +10,8 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
-    tsv_reader f_reader("data/barbell.tsv");
-    //tsv_reader f_reader("/dfs/scratch0/caberger/datasets/socLivejournal/edgelist/replicated.tsv");
+    // tsv_reader f_reader("data/barbell.tsv");
+    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/socLivejournal/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
     R_ab->num_rows = 0;
     while(next != NULL){
@@ -65,6 +65,8 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     });
 
     auto qt = debug::start_clock();
+
+    auto itime = debug::start_clock();
     const Head<hybrid> H = *TR_ab->head;
     const Set<hybrid> A = H.data;
 
@@ -79,7 +81,9 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     for (size_t i = 0; i < A.cardinality; i++) {
       counts_per_a[i] = 0;
     }
+    debug::stop_clock("Assign indices", itime);
 
+    auto ttime = debug::start_clock();
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<hybrid> B(B_buffer.get_memory(tid)); //initialize the memory
       Set<hybrid> C(C_buffer.get_memory(tid));
@@ -90,27 +94,22 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
       op1.foreach([&](uint32_t b_i){ // Peel off B attributes
         const Tail<hybrid>* l2 = (Tail<hybrid>*)H.get_block(b_i);
         if(l2 != NULL){
-          std::cout << "l2 is not null" << std::endl;
           const size_t count = ops::set_intersect(&C,
             &l2->data,
             &op1)->cardinality;
           counts_per_a[a_to_index[a_i]] += count;
-          std::cout << "C.cardinality" << count << std::endl;
           /*C.foreach([&](uint32_t c_i){ // TODO: what to do about selfloops?
             if (b_i < c_i) {
               num_triangles.update(tid, TR_ab->head->get_block(a_i)->data.cardinality);
             }
           });*/
-        } else {
-          std::cout << "l2 is null" << std::endl;
         }
       });
     });
 
-    for (size_t i = 0; i < A.cardinality; i++) {
-      std::cout << counts_per_a[i] << std::endl;
-    }
+    debug::stop_clock("Triangles", ttime);
 
+    auto btime = debug::start_clock();
     A.par_foreach([&](size_t tid, uint32_t a_i){
       const Set<hybrid> B = ((Tail<hybrid>*) H.get_block(a_i))->data;
       uint32_t count_per_a = counts_per_a[a_to_index[a_i]];
@@ -118,6 +117,8 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
         num_triangles.update(tid, count_per_a * counts_per_a[a_to_index[b_i]]);
       });
     });
+
+    debug::stop_clock("Barbells", btime);
 
     size_t result = num_triangles.evaluate(0);
     debug::stop_clock("Query",qt);
