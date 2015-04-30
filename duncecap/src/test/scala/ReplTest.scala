@@ -16,12 +16,12 @@ import ExecutionContext.Implicits.global
 class ReplTest extends FunSuite with BeforeAndAfterAll {
   override def beforeAll = {
     println("starting beforeAll")
-    sys.process.Process(Seq("pkill", "server")).! // in case it was already running
-    sys.process.Process(Seq("make", "server"), new File("../emptyheaded")).!
-    Future {
-      sys.process.Process(Seq("ls", "bin"), new File("../emptyheaded")).!
-      sys.process.Process(Seq("./bin/server"), new File("../emptyheaded")).!
-    }
+//    sys.process.Process(Seq("pkill", "server")).! // in case it was already running
+//    sys.process.Process(Seq("make", "server"), new File("../emptyheaded")).!
+//    Future {
+//      sys.process.Process(Seq("ls", "bin"), new File("../emptyheaded")).!
+//      sys.process.Process(Seq("./bin/server"), new File("../emptyheaded")).!
+//    }
     println("got through beforeAll")
   }
 
