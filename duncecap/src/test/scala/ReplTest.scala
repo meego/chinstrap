@@ -17,7 +17,7 @@ class ReplTest extends FunSuite with BeforeAndAfterAll {
 
   override def beforeAll = {
     sys.process.Process(Seq("pkill", "server")).! // in case it was already running
-    sys.process.Process(Seq("make"), new File("../emptyheaded")).!
+    sys.process.Process(Seq("make server"), new File("../emptyheaded")).!
     Future {
       sys.process.Process(Seq("./bin/server"), new File("../emptyheaded")).!
     }
@@ -44,6 +44,7 @@ class ReplTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("Check that repl can compile graph queries") {
+    println("got here")
     val result1 = getServerResponse(":load scripts/triangleOpt.datalog")
     assert(result1.contains("6 rows loaded"))
     assert(result1.contains("6\n"))
