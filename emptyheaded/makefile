@@ -76,7 +76,6 @@ libs:
 
 	cd ./libs && wget http://download.zeromq.org/zeromq-4.0.5.tar.gz && tar xvzf zeromq-4.0.5.tar.gz
 	cd ./libs/zeromq-4.0.5 && ./configure --prefix=/home/travis/build/craberger/chinstrap/emptyheaded/libs && make && make install
-  export PATH=$(PATH):/home/travis/build/craberger/chinstrap/emptyheaded/libs/zeromq-4.0.5/include
 
 tests: $(TESTS_EXES)
 	@$(foreach bin, $(TESTS_EXES), $(bin);)

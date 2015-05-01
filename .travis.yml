@@ -1,5 +1,8 @@
 language: cpp
 compiler: gcc
 
-before_script: "cd ./emptyheaded && make libs && make server && ./bin/server &"
+before_script: 
+ - "cd ./emptyheaded && make libs"
+ - "export PATH=$PATH:/home/travis/build/craberger/chinstrap/emptyheaded/libs/zeromq-4.0.5/include"
+ - "cd ./emptyheaded && make server && ./bin/server &"
 script: "cd ./duncecap && ./binariesForTravis/sbt-for-travis test"
