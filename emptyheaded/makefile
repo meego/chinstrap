@@ -71,7 +71,7 @@ libs:
 	mkdir -p libs
 
 	cd ./libs && wget http://download.zeromq.org/zeromq-4.0.5.tar.gz && tar xvzf zeromq-4.0.5.tar.gz
-	cd ./libs/zeromq-4.0.5 && ./configure --prefix=/dfs/scratch0/susanctu/chinstrap/emptyheaded/libs && make install
+	cd ./libs/zeromq-4.0.5 && ./configure --prefix=/home/travis/build/craberger/chinstrap/emptyheaded/libs && make install
 
 tests: $(TESTS_EXES)
 	@$(foreach bin, $(TESTS_EXES), $(bin);)
