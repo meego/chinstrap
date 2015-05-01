@@ -12,4 +12,4 @@ script:
  - "cd ../ && source ./emptyheaded/tests/test_all.sh"
  - "cd ./emptyheaded && make server && ./bin/server &"
  - "pwd"
- - "cd ./../duncecap && ./binariesForTravis/sbt-for-travis test"
+ - "cd ./duncecap && ./binariesForTravis/sbt-for-travis test"
