@@ -1,15 +1,4 @@
 language: cpp
 compiler: gcc
 
-before_script: 
- - "cd ./emptyheaded && make libs"
- - "export PATH=$PATH:/home/travis/build/craberger/chinstrap/emptyheaded/libs/zeromq-4.0.5/include"
- - "export CPATH=$CPATH:/home/travis/build/craberger/chinstrap/emptyheaded/libs/zeromq-4.0.5/include"
- - "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/travis/build/craberger/chinstrap/emptyheaded/libs/zeromq-4.0.5/include"
- - "export LIBRARY_PATH=LIBRARY_PATH:/home/travis/build/craberger/chinstrap/emptyheaded/libs/zeromq-4.0.5/include"
-
-script: 
- - "pwd"
- - "cd ../ && source ./emptyheaded/tests/test_all.sh && cd ./emptyheaded && make server && ./bin/server &"
- - "pwd"
- - "cd ../duncecap && ./binariesForTravis/sbt-for-travis test"
+script: "source ./emptyheaded/tests/test_all.sh"
