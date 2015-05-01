@@ -8,6 +8,7 @@ CXX ?= g++-4.9
 override CXXFLAGS += -ltbb -lpthread -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
+INCLUDE_DIRS=-I/dfs/scratch0/susanctu/chinstrap/emptyheaded/libs/zeromq-4.0.5
 OBJDIR=build
 EXEDIR=bin
 HEADERS=$(wildcard src/*hpp)
@@ -68,14 +69,9 @@ server: $(OBJECTS) $(EXEDIR)
 libs:
 	rm -rf libs
 	mkdir -p libs
-	cd ./libs && wget https://googletest.googlecode.com/files/gtest-1.7.0.zip && unzip gtest-1.7.0.zip
-	cd ./libs/gtest-1.7.0/ && ./configure
-	cd ./libs && make -C ./gtest-1.7.0
-
-	cd ./libs/ && wget https://www.threadingbuildingblocks.org/sites/default/files/software_releases/linux/tbb43_20150424oss_lin.tgz && tar zxvf tbb43_20150424oss_lin.tgz
 
 	cd ./libs && wget http://download.zeromq.org/zeromq-4.0.5.tar.gz && tar xvzf zeromq-4.0.5.tar.gz
-	cd ./libs/zeromq-4.0.5 && ./configure --prefix=/home/travis/build/craberger/chinstrap/emptyheaded/libs && make && make install
+	cd ./libs/zeromq-4.0.5 && ./configure --prefix=/dfs/scratch0/susanctu/chinstrap/emptyheaded/libs && make install
 
 tests: $(TESTS_EXES)
 	@$(foreach bin, $(TESTS_EXES), $(bin);)
