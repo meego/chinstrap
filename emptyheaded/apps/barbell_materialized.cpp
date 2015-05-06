@@ -4,6 +4,7 @@
 #include "emptyheaded.hpp"
 #include "utils/io.hpp"
 
+
 extern "C" void run(std::unordered_map<std::string, void*>& relations) {
 
     //create the relation (currently a column wise table)
@@ -60,12 +61,11 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     //R(a,b) join T(b,c) join S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> B_buffer(pow(R_ab->num_rows, 1.5));
-    allocator::memory<uint8_t> C_buffer(pow(R_ab->num_rows, 1.5));
+    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 1) * sizeof(uint32_t));
+    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 1) * sizeof(uint32_t));
+    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 1) * sizeof(uint32_t));
 
     typedef std::unordered_map<uint32_t, Block<hybrid>*> map_t;
-
-
     auto qt = debug::start_clock();
 
     const Head<hybrid> H = *TR_ab->head;
@@ -76,10 +76,14 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
         return a;
       });
 
+    Block<hybrid>* a_block = new Block<hybrid>();
+    a_block->data.data = A_buffer.get_next(0, A.cardinality * sizeof(uint32_t));
+    memcpy(a_block->data.data, A.data, A.number_of_bytes);
+ 
     A.par_foreach([&](size_t tid, uint32_t a_i){
       const Set<hybrid> op1 = ((Tail<hybrid>*) H.get_block(a_i))->data;
       Block<hybrid>* b_block = new Block<hybrid>();
-      b_block->data.data = B_buffer.get_next(tid, std::min(A.cardinality, op1.cardinality));
+      b_block->data.data = B_buffer.get_next(tid, std::min(A.cardinality * sizeof(uint32_t), op1.cardinality * sizeof(uint32_t)));
 
       map_t tmp_a_map;
       tmp_a_map[a_i] = b_block;
@@ -90,21 +94,25 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
       op1.foreach([&](uint32_t b_i){ // Peel off B attributes
         const Tail<hybrid>* l2 = (Tail<hybrid>*)H.get_block(b_i);
         if(l2 != NULL){
-          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, std::min(l2->data.cardinality, op1.cardinality)));
+          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, std::min(l2->data.cardinality * sizeof(uint32_t), op1.cardinality * sizeof(uint32_t))));
           ops::set_intersect(C_values, &l2->data, &op1);
           b_block->map[b_i] = (Block<hybrid>*)C_values;
         }
       });
     });
 
-
     map_t result = a_map.evaluate(map_t());
-
+    for (auto it = result.begin(); it != result.end(); it++) {
+      uint32_t a_i = it->first;
+      Block<hybrid>* block_ptr = it->second;
+      a_block->map[a_i] = block_ptr;
+    }
     debug::stop_clock("Query",qt);
 
-    std::cout << result.size() << std::endl;
-    //////////////////////////////////////////////////////////////////////
+  //  std::cout << result.size() << std::endl;
+   //////////////////////////////////////////////////////////////////////
 }
+
 int main() {
   std::unordered_map<std::string, void*> relations;
   run(relations);
