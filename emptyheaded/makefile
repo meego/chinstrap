@@ -5,7 +5,7 @@
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
 override CXX = g++
 #override CXX = clang++
-override CXXFLAGS += -ltbb -lpthread -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
+override CXXFLAGS += -g -ltbb -lpthread -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
 OBJDIR=build
@@ -46,7 +46,7 @@ $(EXEDIR):
 	mkdir -p $(EXEDIR)
 
 $(APPS_EXES): $(OBJECTS) $(APP_SOURCES) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) $(@:bin%=apps%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(@:bin%=apps%.cpp) $(CXXFLAGS) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)

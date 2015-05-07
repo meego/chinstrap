@@ -41,4 +41,10 @@ struct Head{
   }
 };
 
+template<class T>
+struct AggregatedBlock{
+  Set<T> data;
+  std::unordered_map<uint32_t,int> map; // stores counts
+};
+
 #endif
