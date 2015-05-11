@@ -59,7 +59,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     //R(a,b) join T(b,c) join S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> A_buffer(1000);
+    allocator::memory<uint8_t> A_buffer(1000); // TODO: alloc size
     allocator::memory<uint8_t> B_buffer(1000);
     allocator::memory<uint8_t> C_buffer(1000);
 

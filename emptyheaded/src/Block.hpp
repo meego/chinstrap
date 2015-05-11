@@ -11,7 +11,7 @@ array of pointers is indexed in by ID
 3. Sparse should have a set along with an unordered map (for now)
 4. Tail should have just the set data
 
-Data should be laid out like 
+Data should be laid out like
 ----------------------------------
 | Set | Set Data | Map | Map Data
 ----------------------------------
@@ -44,7 +44,7 @@ struct Head{
 template<class T>
 struct AggregatedBlock{
   Set<T> data;
-  std::unordered_map<uint32_t,int> map; // stores counts
+  std::unordered_map<uint32_t, size_t> map; // stores counts
 };
 
 #endif

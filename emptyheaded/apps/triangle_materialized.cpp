@@ -5,7 +5,7 @@
 #include "utils/io.hpp"
 
 
-extern "C" void run(std::unordered_map<std::string, void*>& relations) {
+extern "C" void run(std::unordered_map<std::string, void*>& relations, const char* dataset) {
 
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
@@ -14,7 +14,8 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
     //tsv_reader f_reader("data/small.txt");
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/facebook/edgelist/replicated.tsv");
+    tsv_reader f_reader(std::string("/dfs/scratch0/caberger/datasets/") + dataset + "/edgelist/replicated.tsv");
+
     char *next = f_reader.tsv_get_first();
     R_ab->num_rows = 0;
     while(next != NULL){
@@ -61,9 +62,9 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     //R(a,b) join T(b,c) join S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 1) * sizeof(uint32_t));
-    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 1) * sizeof(uint32_t));
-    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 1) * sizeof(uint32_t));
+    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
+    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
+    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
 
     typedef std::unordered_map<uint32_t, Block<hybrid>*> map_t;
     auto qt = debug::start_clock();
@@ -71,23 +72,17 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     const Head<hybrid> H = *TR_ab->head;
     const Set<hybrid> A = H.data;
 
-    par::reducer<map_t> a_map(map_t(), [](map_t a, map_t b) {
-        a.insert(b.begin(), b.end());
-        return a;
-      });
-
-    Block<hybrid>* a_block = new Block<hybrid>();
+    Head<hybrid>* a_block = new Head<hybrid>();
     a_block->data.data = A_buffer.get_next(0, A.cardinality * sizeof(uint32_t));
     memcpy(a_block->data.data, A.data, A.number_of_bytes);
- 
+    a_block->map = new Block<hybrid>*[A.cardinality];
+
     A.par_foreach([&](size_t tid, uint32_t a_i){
       const Set<hybrid> op1 = ((Tail<hybrid>*) H.get_block(a_i))->data;
       Block<hybrid>* b_block = new Block<hybrid>();
       b_block->data.data = B_buffer.get_next(tid, std::min(A.cardinality * sizeof(uint32_t), op1.cardinality * sizeof(uint32_t)));
 
-      map_t tmp_a_map;
-      tmp_a_map[a_i] = b_block;
-      a_map.update(tid, tmp_a_map);
+      a_block->map[a_i] = b_block;
 
       ops::set_intersect(&b_block->data,&op1,&A); //intersect the B
 
@@ -101,19 +96,13 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
       });
     });
 
-    map_t result = a_map.evaluate(map_t());
-    for (auto it = result.begin(); it != result.end(); it++) {
-      uint32_t a_i = it->first;
-      Block<hybrid>* block_ptr = it->second;
-      a_block->map[a_i] = block_ptr;
-    }
     debug::stop_clock("Query",qt);
 
   //  std::cout << result.size() << std::endl;
    //////////////////////////////////////////////////////////////////////
 }
 
-int main() {
+int main(int argc, char* argv[]) {
   std::unordered_map<std::string, void*> relations;
-  run(relations);
+  run(relations, argv[1]);
 }
