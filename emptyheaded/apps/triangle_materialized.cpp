@@ -52,7 +52,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 
     //add some sort of lambda to do selections
     Trie<hybrid> *TR_ab = Trie<hybrid>::build(ER_ab,[&](size_t index){
-      return true; //ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
+      return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
 
     debug::stop_clock("Build",bt);
@@ -72,10 +72,17 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
     const Head<hybrid> H = *TR_ab->head;
     const Set<hybrid> A = H.data;
 
+    auto head_t = debug::start_clock();
     Head<hybrid>* a_block = new Head<hybrid>();
     a_block->data.data = A_buffer.get_next(0, A.cardinality * sizeof(uint32_t));
     memcpy(a_block->data.data, A.data, A.number_of_bytes);
+    a_block->data.cardinality = A.cardinality;
+    a_block->data.number_of_bytes = A.number_of_bytes;
+    a_block->data.density = A.density;
+    a_block->data.type = A.type;
+
     a_block->map = new Block<hybrid>*[A.cardinality];
+    debug::stop_clock("Build Head", head_t);
 
     A.par_foreach([&](size_t tid, uint32_t a_i){
       const Set<hybrid> op1 = ((Tail<hybrid>*) H.get_block(a_i))->data;
@@ -98,7 +105,26 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 
     debug::stop_clock("Query",qt);
 
-  //  std::cout << result.size() << std::endl;
+    size_t size = 0;
+    a_block->data.foreach([&](uint32_t a_i) {
+        Block<hybrid>* b_block = a_block->map[a_i];
+        if (b_block) {
+          b_block->data.foreach([&](uint32_t b_i) {
+              Block<hybrid>* c_block = b_block->map[b_i];
+              if (c_block) {
+                std::cout << "a: " << a_i
+                          << "\tb: " << b_i
+                          << "\tcardinality: "
+                          << c_block->data.cardinality
+                          << std::endl;
+
+                size += c_block->data.cardinality;
+              }
+          });
+        }
+      });
+
+    std::cout << size << std::endl;
    //////////////////////////////////////////////////////////////////////
 }
 
