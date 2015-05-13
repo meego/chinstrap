@@ -1,19 +1,15 @@
-#include <cmath>
-#include <iostream>
-#include <unordered_map>
-#include "emptyheaded.hpp"
-#include "utils/io.hpp"
+#include "main.hpp"
 
-
-extern "C" void run(std::unordered_map<std::string, void*>& relations, const char* dataset) {
-
+template<class T>
+class triangle_materialized: public application<T> {
+  void run(std::string path){
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/facebook/edgelist/replicated.tsv");
+    tsv_reader f_reader(path);
     // tsv_reader f_reader(dataset);
 
     char *next = f_reader.tsv_get_first();
@@ -79,20 +75,25 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 
     size_t tid = 0;
     A.foreach([&](uint32_t a_i){
+      std::cout << "a: " << a_i << std::endl;
       const Set<hybrid> matching_b = ((Tail<hybrid>*) H.get_block(a_i))->data;
       Block<hybrid>* b_block = new Block<hybrid>();
       // TODO: how to compute number of bytes??
-      b_block->data = B_buffer.get_next(tid, 10000);
+      b_block->data = B_buffer.get_next(tid, sizeof(uint64_t)*R_ab->num_rows);
       ops::set_intersect(&b_block->data, &matching_b, &A); //intersect the B
+      B_buffer.roll_back(tid, sizeof(uint64_t)*R_ab->num_rows - b_block->data.number_of_bytes);
 
       a_block->map[a_i] = b_block;
 
       b_block->data.foreach([&](uint32_t b_i){ // Peel off B attributes
+        std::cout << "b: " << b_i << std::endl;
         const Tail<hybrid>* matching_c = (Tail<hybrid>*)H.get_block(b_i);
         if(matching_c != NULL){
-          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, 10000));
+          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, sizeof(uint64_t)*R_ab->num_rows));
           ops::set_intersect(C_values, &matching_c->data, &matching_b);
+          C_buffer.roll_back(tid, sizeof(uint64_t)*R_ab->num_rows - C_values->number_of_bytes);
           b_block->map[b_i] = (Block<hybrid>*)C_values;
+          std::cout << C_values->cardinality << std::endl;
         }
       });
     });
@@ -106,11 +107,11 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
           b_block->data.foreach([&](uint32_t b_i) {
               Block<hybrid>* c_block = b_block->map[b_i];
               if (c_block) {
-                // std::cout << "a: " << a_i
-                //           << "\tb: " << b_i
-                //           << "\tcardinality: "
-                //           << c_block->data.cardinality
-                //           << std::endl;
+                 std::cout << "a: " << a_i
+                           << "\tb: " << b_i
+                           << "\tcardinality: "
+                           << c_block->data.cardinality
+                           << std::endl;
 
                 size += c_block->data.cardinality;
               }
@@ -120,9 +121,10 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 
     std::cout << size << std::endl;
    //////////////////////////////////////////////////////////////////////
-}
+  }
+};
 
-int main(int argc, char* argv[]) {
-  std::unordered_map<std::string, void*> relations;
-  run(relations, argv[1]);
+template<class T>
+application<T>* init_app(){
+  return new triangle_materialized<T>(); 
 }
