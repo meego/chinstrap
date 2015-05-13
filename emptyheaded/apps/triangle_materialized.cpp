@@ -58,26 +58,28 @@ class triangle_materialized: public application<T> {
     //R(a,b) join T(b,c) join S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 100000000) * sizeof(uint32_t));
-    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 100000000) * sizeof(uint32_t));
-    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 100000000) * sizeof(uint32_t));
+    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint64_t));
+    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint64_t));
+    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint64_t));
+    allocator::memory<uint8_t> block_buffer(3 * R_ab->num_rows * sizeof(Block<hybrid>) + 1000);
 
     auto qt = debug::start_clock();
 
     const Head<hybrid> H = *TR_ab->head;
     const Set<hybrid> A = H.data;
 
+    size_t tid = 0;
     auto head_t = debug::start_clock();
-    Head<hybrid>* a_block = new Head<hybrid>();
+    Head<hybrid>* a_block = (Head<hybrid>*)block_buffer.get_next(tid, sizeof(Head<hybrid>));
     a_block->data = A;
     a_block->map = new Block<hybrid>*[A.cardinality + 1]; // TODO: is this always guaranteed to be at least the maximum value??
+    // a_block->map = (Block<hybrid>**)block_buffer.get_next(tid, sizeof(Block<hybrid>*) * (A.cardinality + 1));
     debug::stop_clock("Build Head", head_t);
 
-    size_t tid = 0;
     A.foreach([&](uint32_t a_i){
-      std::cout << "a: " << a_i << std::endl;
       const Set<hybrid> matching_b = ((Tail<hybrid>*) H.get_block(a_i))->data;
-      Block<hybrid>* b_block = new Block<hybrid>();
+      Block<hybrid>* b_block = (Block<hybrid>*)block_buffer.get_next(tid, sizeof(Block<hybrid>), BYTES_PER_CACHELINE);
+      // Block<hybrid>* b_block = new Block<hybrid>();
       // TODO: how to compute number of bytes??
       b_block->data = B_buffer.get_next(tid, sizeof(uint64_t)*R_ab->num_rows);
       ops::set_intersect(&b_block->data, &matching_b, &A); //intersect the B
@@ -86,14 +88,15 @@ class triangle_materialized: public application<T> {
       a_block->map[a_i] = b_block;
 
       b_block->data.foreach([&](uint32_t b_i){ // Peel off B attributes
-        std::cout << "b: " << b_i << std::endl;
         const Tail<hybrid>* matching_c = (Tail<hybrid>*)H.get_block(b_i);
         if(matching_c != NULL){
-          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, sizeof(uint64_t)*R_ab->num_rows));
+          // Placement new!!
+          char* C_block_ptr = (char*)block_buffer.get_next(tid, sizeof(Set<hybrid>));
+          Set<hybrid>* C_values = new(C_block_ptr) Set<hybrid>(C_buffer.get_next(tid, sizeof(uint64_t)*R_ab->num_rows));
+
           ops::set_intersect(C_values, &matching_c->data, &matching_b);
           C_buffer.roll_back(tid, sizeof(uint64_t)*R_ab->num_rows - C_values->number_of_bytes);
           b_block->map[b_i] = (Block<hybrid>*)C_values;
-          std::cout << C_values->cardinality << std::endl;
         }
       });
     });
@@ -107,12 +110,6 @@ class triangle_materialized: public application<T> {
           b_block->data.foreach([&](uint32_t b_i) {
               Block<hybrid>* c_block = b_block->map[b_i];
               if (c_block) {
-                 std::cout << "a: " << a_i
-                           << "\tb: " << b_i
-                           << "\tcardinality: "
-                           << c_block->data.cardinality
-                           << std::endl;
-
                 size += c_block->data.cardinality;
               }
           });
@@ -126,5 +123,5 @@ class triangle_materialized: public application<T> {
 
 template<class T>
 application<T>* init_app(){
-  return new triangle_materialized<T>(); 
+  return new triangle_materialized<T>();
 }
