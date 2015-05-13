@@ -13,7 +13,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
-    tsv_reader f_reader("data/medium.txt");
+    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/facebook/edgelist/replicated.tsv");
     // tsv_reader f_reader(dataset);
 
     char *next = f_reader.tsv_get_first();
@@ -62,9 +62,9 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
     //R(a,b) join T(b,c) join S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
-    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
-    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
+    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 100000000) * sizeof(uint32_t));
+    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 100000000) * sizeof(uint32_t));
+    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 100000000) * sizeof(uint32_t));
 
     auto qt = debug::start_clock();
 
@@ -81,8 +81,8 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
     A.foreach([&](uint32_t a_i){
       const Set<hybrid> matching_b = ((Tail<hybrid>*) H.get_block(a_i))->data;
       Block<hybrid>* b_block = new Block<hybrid>();
-      b_block->data = B_buffer.get_next(tid, std::min(A.cardinality * sizeof(uint32_t),
-                                                      matching_b.cardinality * sizeof(uint32_t)));
+      // TODO: how to compute number of bytes??
+      b_block->data = B_buffer.get_next(tid, 10000);
       ops::set_intersect(&b_block->data, &matching_b, &A); //intersect the B
 
       a_block->map[a_i] = b_block;
@@ -90,8 +90,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
       b_block->data.foreach([&](uint32_t b_i){ // Peel off B attributes
         const Tail<hybrid>* matching_c = (Tail<hybrid>*)H.get_block(b_i);
         if(matching_c != NULL){
-          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, std::min(matching_c->data.cardinality,
-                                                                                  matching_b.cardinality) * sizeof(uint32_t)));
+          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, 10000));
           ops::set_intersect(C_values, &matching_c->data, &matching_b);
           b_block->map[b_i] = (Block<hybrid>*)C_values;
         }
@@ -100,18 +99,18 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 
     debug::stop_clock("Query",qt);
 
-    size_t size = 0;
+    unsigned long size = 0;
     a_block->data.foreach([&](uint32_t a_i) {
         Block<hybrid>* b_block = a_block->map[a_i];
         if (b_block) {
           b_block->data.foreach([&](uint32_t b_i) {
               Block<hybrid>* c_block = b_block->map[b_i];
               if (c_block) {
-                std::cout << "a: " << a_i
-                          << "\tb: " << b_i
-                          << "\tcardinality: "
-                          << c_block->data.cardinality
-                          << std::endl;
+                // std::cout << "a: " << a_i
+                //           << "\tb: " << b_i
+                //           << "\tcardinality: "
+                //           << c_block->data.cardinality
+                //           << std::endl;
 
                 size += c_block->data.cardinality;
               }
@@ -120,10 +119,6 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
       });
 
     std::cout << size << std::endl;
-    std::cout << "B cardinality for A=2: " << a_block->map[2]->data.cardinality << std::endl;
-    a_block->map[2]->data.foreach([&] (uint32_t b_i) {
-        std::cout << "value: " << b_i << std::endl;
-      });
    //////////////////////////////////////////////////////////////////////
 }
 
