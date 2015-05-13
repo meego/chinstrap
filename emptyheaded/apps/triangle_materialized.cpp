@@ -13,8 +13,8 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
-    //tsv_reader f_reader("data/small.txt");
-    tsv_reader f_reader(std::string("/dfs/scratch0/caberger/datasets/") + dataset + "/edgelist/replicated.tsv");
+    tsv_reader f_reader("data/medium.txt");
+    // tsv_reader f_reader(dataset);
 
     char *next = f_reader.tsv_get_first();
     R_ab->num_rows = 0;
@@ -66,7 +66,6 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
     allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
     allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint32_t));
 
-    typedef std::unordered_map<uint32_t, Block<hybrid>*> map_t;
     auto qt = debug::start_clock();
 
     const Head<hybrid> H = *TR_ab->head;
@@ -74,30 +73,26 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
 
     auto head_t = debug::start_clock();
     Head<hybrid>* a_block = new Head<hybrid>();
-    a_block->data.data = A_buffer.get_next(0, A.cardinality * sizeof(uint32_t));
-    memcpy(a_block->data.data, A.data, A.number_of_bytes);
-    a_block->data.cardinality = A.cardinality;
-    a_block->data.number_of_bytes = A.number_of_bytes;
-    a_block->data.density = A.density;
-    a_block->data.type = A.type;
-
-    a_block->map = new Block<hybrid>*[A.cardinality];
+    a_block->data = A;
+    a_block->map = new Block<hybrid>*[A.cardinality + 1]; // TODO: is this always guaranteed to be at least the maximum value??
     debug::stop_clock("Build Head", head_t);
 
-    A.par_foreach([&](size_t tid, uint32_t a_i){
-      const Set<hybrid> op1 = ((Tail<hybrid>*) H.get_block(a_i))->data;
+    size_t tid = 0;
+    A.foreach([&](uint32_t a_i){
+      const Set<hybrid> matching_b = ((Tail<hybrid>*) H.get_block(a_i))->data;
       Block<hybrid>* b_block = new Block<hybrid>();
-      b_block->data.data = B_buffer.get_next(tid, std::min(A.cardinality * sizeof(uint32_t), op1.cardinality * sizeof(uint32_t)));
+      b_block->data = B_buffer.get_next(tid, std::min(A.cardinality * sizeof(uint32_t),
+                                                      matching_b.cardinality * sizeof(uint32_t)));
+      ops::set_intersect(&b_block->data, &matching_b, &A); //intersect the B
 
       a_block->map[a_i] = b_block;
 
-      ops::set_intersect(&b_block->data,&op1,&A); //intersect the B
-
-      op1.foreach([&](uint32_t b_i){ // Peel off B attributes
-        const Tail<hybrid>* l2 = (Tail<hybrid>*)H.get_block(b_i);
-        if(l2 != NULL){
-          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, std::min(l2->data.cardinality * sizeof(uint32_t), op1.cardinality * sizeof(uint32_t))));
-          ops::set_intersect(C_values, &l2->data, &op1);
+      b_block->data.foreach([&](uint32_t b_i){ // Peel off B attributes
+        const Tail<hybrid>* matching_c = (Tail<hybrid>*)H.get_block(b_i);
+        if(matching_c != NULL){
+          Set<hybrid>* C_values = new Set<hybrid>(C_buffer.get_next(tid, std::min(matching_c->data.cardinality,
+                                                                                  matching_b.cardinality) * sizeof(uint32_t)));
+          ops::set_intersect(C_values, &matching_c->data, &matching_b);
           b_block->map[b_i] = (Block<hybrid>*)C_values;
         }
       });
@@ -125,6 +120,10 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations, const cha
       });
 
     std::cout << size << std::endl;
+    std::cout << "B cardinality for A=2: " << a_block->map[2]->data.cardinality << std::endl;
+    a_block->map[2]->data.foreach([&] (uint32_t b_i) {
+        std::cout << "value: " << b_i << std::endl;
+      });
    //////////////////////////////////////////////////////////////////////
 }
 
