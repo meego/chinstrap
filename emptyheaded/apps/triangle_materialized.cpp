@@ -58,10 +58,7 @@ class triangle_materialized: public application<T> {
     //R(a,b) join T(b,c) join S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> A_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint64_t));
-    allocator::memory<uint8_t> B_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint64_t));
-    allocator::memory<uint8_t> C_buffer((pow(R_ab->num_rows, 1.5) + 1000) * sizeof(uint64_t));
-    allocator::memory<uint8_t> block_buffer(3 * R_ab->num_rows * sizeof(Block<hybrid>) + 1000);
+    allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(Block<hybrid>));
 
     auto qt = debug::start_clock();
 
@@ -70,7 +67,7 @@ class triangle_materialized: public application<T> {
 
     size_t tid = 0;
     auto head_t = debug::start_clock();
-    Head<hybrid>* a_block = (Head<hybrid>*)block_buffer.get_next(tid, sizeof(Head<hybrid>));
+    Head<hybrid>* a_block = (Head<hybrid>*)output_buffer.get_next(tid, sizeof(Head<hybrid>));
     a_block->data = A;
     a_block->map = new Block<hybrid>*[A.cardinality + 1]; // TODO: is this always guaranteed to be at least the maximum value??
     // a_block->map = (Block<hybrid>**)block_buffer.get_next(tid, sizeof(Block<hybrid>*) * (A.cardinality + 1));
@@ -78,25 +75,28 @@ class triangle_materialized: public application<T> {
 
     A.foreach([&](uint32_t a_i){
       const Set<hybrid> matching_b = ((Tail<hybrid>*) H.get_block(a_i))->data;
-      Block<hybrid>* b_block = (Block<hybrid>*)block_buffer.get_next(tid, sizeof(Block<hybrid>), BYTES_PER_CACHELINE);
-      // Block<hybrid>* b_block = new Block<hybrid>();
+      
+      Block<hybrid>* b_block = (Block<hybrid>*)output_buffer.get_next(tid, sizeof(Block<hybrid>));
+      //Block<hybrid>* b_block = new Block<hybrid>();
       // TODO: how to compute number of bytes??
-      b_block->data = B_buffer.get_next(tid, sizeof(uint64_t)*R_ab->num_rows);
-      ops::set_intersect(&b_block->data, &matching_b, &A); //intersect the B
-      B_buffer.roll_back(tid, sizeof(uint64_t)*R_ab->num_rows - b_block->data.number_of_bytes);
 
-      a_block->map[a_i] = b_block;
+      const size_t alloc_size = sizeof(uint64_t)*R_ab->num_rows;
+      b_block->data = output_buffer.get_next(tid, alloc_size);
+      ops::set_intersect(&b_block->data, &matching_b, &A); //intersect the B
+      output_buffer.roll_back(tid, alloc_size - b_block->data.number_of_bytes);
+
+      a_block->set_block(a_i,b_block);
 
       b_block->data.foreach([&](uint32_t b_i){ // Peel off B attributes
         const Tail<hybrid>* matching_c = (Tail<hybrid>*)H.get_block(b_i);
         if(matching_c != NULL){
           // Placement new!!
-          char* C_block_ptr = (char*)block_buffer.get_next(tid, sizeof(Set<hybrid>));
-          Set<hybrid>* C_values = new(C_block_ptr) Set<hybrid>(C_buffer.get_next(tid, sizeof(uint64_t)*R_ab->num_rows));
+          Tail<hybrid>* C_block_ptr = (Tail<hybrid>*)output_buffer.get_next(tid, sizeof(Tail<hybrid>));
+          C_block_ptr->data = Set<hybrid>(output_buffer.get_next(tid, alloc_size));
 
-          ops::set_intersect(C_values, &matching_c->data, &matching_b);
-          C_buffer.roll_back(tid, sizeof(uint64_t)*R_ab->num_rows - C_values->number_of_bytes);
-          b_block->map[b_i] = (Block<hybrid>*)C_values;
+          ops::set_intersect(&C_block_ptr->data, &matching_c->data, &matching_b);
+          output_buffer.roll_back(tid, alloc_size - C_block_ptr->data.number_of_bytes);
+          b_block->set_block(b_i,(Block<hybrid>*)C_block_ptr);
         }
       });
     });
@@ -105,10 +105,10 @@ class triangle_materialized: public application<T> {
 
     unsigned long size = 0;
     a_block->data.foreach([&](uint32_t a_i) {
-        Block<hybrid>* b_block = a_block->map[a_i];
+        Block<hybrid>* b_block = a_block->get_block(a_i);
         if (b_block) {
           b_block->data.foreach([&](uint32_t b_i) {
-              Block<hybrid>* c_block = b_block->map[b_i];
+              Block<hybrid>* c_block = b_block->get_block(b_i);
               if (c_block) {
                 size += c_block->data.cardinality;
               }
