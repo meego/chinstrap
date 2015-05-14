@@ -25,16 +25,15 @@ struct Tail{
 template<class T>
 struct Block{
   Set<T> data;
-  std::unordered_map<uint32_t,Block<T>*> map;
+  std::unordered_map<uint32_t,Block<T>*> *map;
 
   inline Block<T>* get_block(uint32_t index) const {
-    return map.at(index);
+    return map->at(index);
   }
   inline void set_block(uint32_t index, Block<T> *b){
-    std::cout << "setting1 " << std::endl;
-    map.reserve(1000);
-    std::cout << "setting2 " << std::endl;
-    map.insert(std::make_pair(index,b));
+    if(!map)
+      map = new std::unordered_map<uint32_t,Block<T>*>();
+    map->insert(std::make_pair(index,b));
   }
 
 };
